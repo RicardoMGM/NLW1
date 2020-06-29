@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, ScrollView, Image, Alert } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import MapView, { Marker } from 'react-native-maps';
 import { SvgUri } from 'react-native-svg';
+import * as Location from 'expo-location';
 import api from '../../services/api';
 
 interface Item {
@@ -13,16 +14,57 @@ interface Item {
   image_url: string;
 }
 
+interface Point {
+  id: number;
+  name: string;
+  image: string;
+  latitude: number;
+  longitude: number;
+}
+
 const Points = () => {
   const [itens, setItens] = useState<Item[]>([]);
+  const [points, setPoints] = useState<Point[]>([]);
   const [selectedItens, setSelectedItens] = useState<number[]>([]);
   const navigation = useNavigation();
+  const [initialPosition, setInitialPoition] = useState<[number, number]>([0, 0]);
+
+  useEffect (() => {
+    async function loadPosition(){
+      const { status } = await Location.requestPermissionsAsync();
+
+      if(status !== 'granted') {
+        Alert.alert('Oooops...', 'Precisamos de sua permissão para obter a localização');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync();
+      const { latitude, longitude } = location.coords;
+      setInitialPoition([
+        latitude,
+        longitude,
+      ]);
+    }
+    loadPosition();
+  }, []);
 
   useEffect(() => {
     api.get('itens').then(response => {
       setItens(response.data);
     });
   }, []);
+
+  useEffect(() => {
+    api.get('points', {
+      params: {
+        city: 'Goiânia',
+        uf: 'GO',
+        itens: [1, 2],
+      }
+    }).then(response => {
+      setPoints(response.data);
+    })
+  }, []);  
 
   function handleSelectItem(id: number) {
     const alreadySelected = selectedItens.findIndex(item => item === id);
@@ -40,8 +82,8 @@ const Points = () => {
     navigation.goBack();
   }
 
-  function handleNavigateToDetail() {
-    navigation.navigate('Detail');
+  function handleNavigateToDetail(id: number) {
+    navigation.navigate('Detail', { point_id: id});
   }
 
     return (
@@ -55,28 +97,34 @@ const Points = () => {
             <Text style={styles.description}>Encontre no mapa um ponto de coleta.</Text>  
 
             <View style={styles.mapContainer}>
-              <MapView 
+              { initialPosition[0] !== 0 && (
+                <MapView 
                 style={styles.map} 
                 initialRegion={{
-                  latitude: -16.6782607,
-                  longitude:-49.2334783,
+                  latitude: initialPosition[0],
+                  longitude:initialPosition[1],
                   latitudeDelta: 0.014,
                   longitudeDelta: 0.014,
                 }}
               >
-                <Marker style={styles.mapMarker}
-                  onPress={handleNavigateToDetail}
+                {points.map(point => (
+                  <Marker 
+                  key={String(point.id)} 
+                  style={styles.mapMarker}
+                  onPress={() => handleNavigateToDetail(point.id)}
                   coordinate={{
-                    latitude: -16.6782607,
-                    longitude: -49.2334783,
+                    latitude: point.latitude,
+                    longitude: point.longitude,
                   }}  
                 >
                   <View style={styles.mapMarkerContainer}>
-                    <Image style={styles.mapMarkerImage} source={{uri:'https://images.unsplash.com/photo-1592468257342-8375cb556a69?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60'}} />
-                    <Text style={styles.mapMarkerTitle}>Cão</Text>
+                    <Image style={styles.mapMarkerImage} source={{ uri: point.image }} />
+                <Text style={styles.mapMarkerTitle}>{point.name}</Text>
                   </View>
                 </Marker>  
+                ))}
               </MapView> 
+              )}
             </View>
         </View> 
         <View style={styles.itemsContainer}>
