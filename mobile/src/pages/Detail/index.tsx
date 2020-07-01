@@ -1,18 +1,64 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Feather as Icon, FontAwesome } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { View, StyleSheet, TouchableOpacity, Image, Text, SafeAreaView } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { View, StyleSheet, TouchableOpacity, Image, Text, Linking } from 'react-native';
 import Constants from 'expo-constants';
 import { RectButton } from 'react-native-gesture-handler';
+import api from '../../services/api';
+import * as Mailcomposer from 'expo-mail-composer';
+
+interface Params {
+  point_id: number;
+}
+
+interface Data {
+  point: {
+    image: string;
+    name: string;
+    email: string;
+    whatsapp: string;
+    city: string;
+    uf: string;    
+  };
+  itens: {
+    title: string;
+  }[];
+}
 
 const Detail = () => {
+  const [data, setdata] = useState<Data>({} as Data);
 
     const navigation = useNavigation();
+    const route = useRoute();
+
+    const routeParams = route.params as Params;
+
+    useEffect(() => {
+      console.log(routeParams);
+      api.get(`points/${routeParams.point_id}`).then(response => {
+        console.log(response.data);
+        setdata(response.data);
+      });
+    }, []);
 
     function handleNavigateBack() {
         navigation.goBack();
     }
 
+    function handleComposeMail() {
+      Mailcomposer.composeAsync({
+        subject: 'Interesse na coleta de resíduos',
+        recipients: [data.point.email],
+      });
+    }
+
+    function handleWhatsapp() {
+      Linking.openURL(`whatsapp;//send?phone=${data.point.whatsapp}&text=Tenho interesse sobe a coleta de resíduos`);
+    }
+
+    if(!data.point) {
+      return null;
+    }
 
     return (
         <>
@@ -20,23 +66,27 @@ const Detail = () => {
                 <TouchableOpacity onPress={handleNavigateBack}>
                     <Icon name="arrow-left" size={20} color="#34cb79" />
                 </TouchableOpacity>  
-                <Image style={styles.pointImage} source={{ uri: 'https://images.unsplash.com/photo-1592468257342-8375cb556a69?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60'}}/>
+                <Image style={styles.pointImage} source={{ uri: data.point.image}}/>
             
-                <Text style={styles.pointName}>Loja do Cão</Text>
-                <Text style={styles.pointItems}>Cocô, Xixi</Text>
+                <Text style={styles.pointName}>{data.point.name}</Text>
+                <Text style={styles.pointItems}>
+                  {data.itens.map(item => item.title).join(', ')}
+                </Text>
 
                 <View style={styles.address}>
                     <Text style={styles.addressTitle} >Endereço</Text>
-                    <Text style={styles.addressContent}>Goiânia, GO</Text>
+                    <Text style={styles.addressContent}>
+                      {data.point.city}, {data.point.uf}
+                    </Text>
                 </View>
             </View>  
             <View style={styles.footer}>
-                <RectButton style={styles.button} onPress={() => {}}>
+                <RectButton style={styles.button} onPress={handleWhatsapp}>
                     <FontAwesome name="whatsapp" size={20} color="#FFF" />
                     <Text style={styles.buttonText}>Whatsapp</Text>
                 </RectButton>
 
-                <RectButton style={styles.button} onPress={() => {}}>
+                <RectButton style={styles.button} onPress={handleComposeMail}>
                     <Icon name="mail" size={20} color="#FFF" />
                     <Text style={styles.buttonText}>E-mail</Text>
                 </RectButton>
